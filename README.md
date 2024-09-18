@@ -22,7 +22,7 @@ Este repositorio agrupa todos los contenidos en código utilizados en los cursos
 
 La estructura del repositorio es la siguiente:
 
-/
+````
 ├── Asignatura1/
 │   ├── Proyecto1/
 │   ├── Ejercicio1/
@@ -32,6 +32,7 @@ La estructura del repositorio es la siguiente:
 │   ├── Ejercicio2/
 │   └── Ejemplo2/
 └── README.md
+````
 
 ## Requisitos
 
