@@ -43,11 +43,11 @@ La estructura del repositorio es la siguiente:
 
 1. Clona el repositorio:
     ```bash
-    git clone https://github.com/usuario/repositorio-universidad.git
+    git clone https://github.com/marcoeferro/uni.git
     ```
 2. Navega al directorio del proyecto:
     ```bash
-    cd repositorio-universidad
+    cd uni
     ```
 
 ## Uso
