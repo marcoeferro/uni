@@ -1,0 +1,68 @@
+
+import java_cup.runtime.Symbol;
+import java.util.ArrayList;
+import java.util.List;
+
+parser code
+{:
+    public List<String> datos = new ArrayList<String>();
+
+    @Override
+    public void syntax_error(Symbol s){
+        System.out.println(s  +" Linea "+s.left+1 +"  Columna "+s.right   +" "+ (String)s.value);
+    }
+
+    @Override
+    public void unrecovered_syntax_error(Symbol s){
+        System.out.println(s);
+    }
+:}
+
+// Define los terminales (tokens) que vienen del lexer
+terminal INT, BOOL, VOID, MAIN, RETURN, TRUE, FALSE;
+terminal ID, NUMBER;
+terminal PLUS, STAR, EQUAL, LPAREN, RPAREN, LBRACE, RBRACE, SEMICOLON;
+
+// Define los no-terminales
+non terminal String PROGRAM; //Program
+non terminal String DECL; //Declaracion
+non terminal String STATEMENT;       //Statement
+non terminal String EXP;      //Expresion matematica
+non terminal String BLOCK;     //Bloque de codigo
+
+// Precedencia de operadores
+precedence left PLUS;
+precedence left STAR;
+
+//Producciones
+
+PROGRAM ::=
+        INT MAIN LPAREN RPAREN LBRACE BLOCK RBRACE
+    |   VOID MAIN LPAREN RPAREN LBRACE BLOCK RBRACE
+;
+
+BLOCK ::=
+        DECL BLOCK
+    |   STATEMENT BLOCK
+;
+
+DECL ::=
+        INT ID SEMICOLON
+    |   BOOL ID SEMICOLON
+;
+
+STATEMENT ::=
+        ID EQUAL EXP SEMICOLON
+    |   RETURN EXP SEMICOLON
+    |   RETURN SEMICOLON
+;
+
+EXP ::=
+        EXP PLUS EXP
+    |   EXP STAR EXP
+    |   LPAREN EXP RPAREN
+    |   ID
+    |   NUMBER
+    |   TRUE
+    |   FALSE
+;
