@@ -49,11 +49,11 @@ El análisis exploratorio de datos (EDA) es una técnica utilizada para analizar
 
 1. Clona este repositorio en tu máquina local:
     ```bash
-    git clone https://github.com/tu_usuario/titanic-eda.git
+    git clone --no-checkout https://github.com/marcoeferro/uni.git
     ```
 2. Navega al directorio del proyecto:
     ```bash
-    cd titanic-eda
+    cd uni/AI
     ```
 3. Instala las dependencias:
     ```bash
