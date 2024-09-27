@@ -1,7 +1,3 @@
-¡Claro! Aquí tienes un ejemplo de un README para un repositorio que realiza un análisis exploratorio de datos sobre el dataset del Titanic:
-
----
-
 # Análisis Exploratorio de Datos - Dataset del Titanic
 
 Este repositorio contiene un análisis exploratorio de datos (EDA) del famoso dataset del Titanic. El objetivo es investigar y visualizar las características de los pasajeros y cómo estas influyeron en su supervivencia.
@@ -24,13 +20,9 @@ El análisis exploratorio de datos (EDA) es una técnica utilizada para analizar
 
 ```
 ├── data
-│   ├── train.csv
-│   ├── test.csv
+│   ├── titanic.csv
 ├── notebooks
 │   ├── EDA_Titanic.ipynb
-├── images
-│   ├── survival_rate_by_class.png
-│   ├── age_distribution.png
 ├── README.md
 ```
 
