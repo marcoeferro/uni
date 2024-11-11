@@ -1,0 +1,20 @@
+function dibujar(){
+   pintar();
+   derecha();
+   pintar();
+   derecha();
+   pintar();    
+   derecha();
+   pintar(); 
+}      
+
+function main(){
+pintar();
+   derecha();
+   pintar();
+   derecha();
+   pintar();    
+   derecha();
+   pintar();  
+   dibujar();
+}
