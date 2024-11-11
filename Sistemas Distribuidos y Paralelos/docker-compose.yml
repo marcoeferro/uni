@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  etl-service:
+    build:
+      context: ./etl-service # Ubicación del Dockerfile del ETL
+    container_name: etl_service
+    volumes:
+      - ./etl-service/data:/usr/src/app/data # Monta la carpeta data en el contenedor
+      - ./scrapped_data.db:/usr/src/app/scrapped_data.db # Mount the SQLite file to the container
+    environment:
+      - TZ=America/Argentina/Buenos_Aires
+    command: cron
+
+  crud-service:
+    build:
+      context: ./CRUD-service # Ubicación del Dockerfile del CRUD
+    container_name: crud_service
+    volumes:
+      - ./scrapped_data.db:/usr/src/app/scrapped_data.db # Mount the SQLite file to the container
+    environment:
+      - TZ=America/Argentina/Buenos_Aires
+networks:
+  etl_network:
+    driver: bridge
