@@ -15,6 +15,6 @@ class Congruencial:
             numeros.append(self.seed)
         return numeros
 
-# # Ejemplo de uso:
+# Ejemplo de uso:
 # lcg = Congruencial(seed=12345)  # Puedes cambiar el valor de la semilla
 # print(lcg.randoms())
