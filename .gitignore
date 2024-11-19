@@ -1,0 +1,2 @@
+# Ignorar todos los archivos .gyc en todas las carpetas
+*.gyc
