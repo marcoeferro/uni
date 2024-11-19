@@ -1,18 +1,9 @@
 import Congruencial
 
-def distribute_numbers(num_intervals, numbers):
-    """Distributes numbers into intervals and returns the observed frequencies.
-
-    Args:
-        num_intervals: The number of intervals to divide the data into.
-        numbers: A list of random numbers.
-
-    Returns:
-        A list of observed frequencies for each interval.
-    """
-    interval_size = 1 / num_intervals
-    ceiling = interval_size
-    floor = 0
+def distribute_numbers(num_intervals, numbers, min_value=0, max_value=1): 
+    interval_size = (max_value - min_value) / num_intervals 
+    ceiling = min_value + interval_size 
+    floor = min_value
     distribution = [0] * num_intervals
 
     for i in range(num_intervals):
@@ -25,15 +16,6 @@ def distribute_numbers(num_intervals, numbers):
     return distribution
 
 def calculate_chi_squared(observed_frequencies, expected_frequency):
-    """Calculates the chi-squared statistic.
-
-    Args:
-        observed_frequencies: A list of observed frequencies.
-        expected_frequency: The expected frequency for each interval.
-
-    Returns:
-        The calculated chi-squared statistic.
-    """
     return sum([(x - expected_frequency)**2 / expected_frequency for x in observed_frequencies])
 
 """
@@ -53,10 +35,8 @@ de una distribución uniforme.
 con un valor crítico obtenido de una tabla o utilizando un software estadístico.
 """
 
-
-
-num_intervals = 5
-sample_size = 1000
+num_intervals = 8
+sample_size = 10
 expected_frequency = sample_size / num_intervals
 
 lcg = Congruencial.Congruencial(seed=12345)
