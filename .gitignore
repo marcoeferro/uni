@@ -2,7 +2,7 @@
 *.pyc
 
 # Ignorar todas las carpetas __pycache__ en cualquier parte del proyecto
-**/__pycache__/
+__pycache__/
 
-# Ignorar todas los archivos csv
-**/*.csv/
+# Ignorar todos los archivos .csv en todas las carpetas
+*.csv
