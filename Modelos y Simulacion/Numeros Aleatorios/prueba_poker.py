@@ -69,3 +69,56 @@ print("Estadístico Chi-cuadrado:", chi_square_stat,"\n")
 chi_squared_test(alpha=0.05, grados_libertad=6, calculated_value=chi_square_stat)
 # Valor crítico chi-cuadrado con α=0.05 y 6 grados de libertad: 12.5916
 # Si el estadístico es menor que este valor, la hipótesis de uniformidad no se rechaza.
+
+
+"""
+Este código implementa una prueba estadística para evaluar si los números generados por un generador congruencial lineal 
+siguen una distribución uniforme al analizar las frecuencias de categorías específicas en los dígitos de los números generados.
+
+1. **Formato de muestras (`format_samples`)**:
+    - Convierte una lista de números flotantes a cadenas de 5 dígitos sin el prefijo "0." para analizar sus dígitos.
+    - Ejemplo: Un número como `0.12345` se convierte en `"12345"`.
+
+2. **Clasificación de patrones (`categorize_item`)**:
+    - Clasifica cada número de 5 dígitos en una categoría según la frecuencia de aparición de sus dígitos:
+        - `"Quintilla"`: Todos los dígitos son iguales (ej., `11111`).
+        - `"Poker"`: Cuatro dígitos iguales (ej., `11112`).
+        - `"Full House"`: Tres dígitos iguales y dos iguales (ej., `11122`).
+        - `"Trio"`: Tres dígitos iguales (ej., `11123`).
+        - `"2Pares"`: Dos pares distintos (ej., `11223`).
+        - `"1Par"`: Un par (ej., `11234`).
+        - `"Todos Distintos"`: Todos los dígitos son diferentes (ej., `12345`).
+
+3. **Frecuencias observadas (`observe_frequencies`)**:
+    - Recorre las muestras formateadas y clasifica cada una en una de las categorías mencionadas.
+    - Cuenta cuántos números corresponden a cada categoría y devuelve un diccionario con las frecuencias observadas.
+
+4. **Estadístico Chi-cuadrado (`compute_statistic`)**:
+    - Calcula el estadístico chi-cuadrado utilizando la fórmula:
+        \[
+        \chi^2 = \sum \frac{(O_i - E_i)^2}{E_i}
+        \]
+        donde \( O_i \) son las frecuencias observadas y \( E_i \) son las frecuencias esperadas.
+
+5. **Prueba de hipótesis Chi-cuadrado (`chi_squared_test`)**:
+    - Determina si los números generados siguen una distribución uniforme.
+    - Calcula el valor crítico chi-cuadrado usando la función `stats.chi2.ppf` con el nivel de significancia (\( \alpha \)) y los grados de libertad.
+    - Compara el estadístico chi-cuadrado calculado con el valor crítico:
+        - Si el valor calculado es mayor que el crítico, se rechaza la hipótesis nula (los números no son uniformes).
+        - Si no, no se rechaza la hipótesis nula (los números son uniformes).
+
+6. **Prueba aplicada**:
+   - **Probabilidades teóricas**: Define las probabilidades de ocurrencia de cada categoría según la teoría de combinatoria.
+   - **Tamaño de muestra**: Se genera una muestra de tamaño 100 utilizando un generador congruencial lineal (`Congruencial`).
+   - **Cálculo de frecuencias**:
+     - **Observadas**: Cuenta cuántas muestras caen en cada categoría usando `observe_frequencies`.
+     - **Esperadas**: Calcula las frecuencias esperadas multiplicando las probabilidades teóricas por el tamaño de la muestra.
+   - **Estadístico Chi-cuadrado**: Se calcula comparando frecuencias observadas y esperadas.
+   - **Prueba de hipótesis**:
+        - Nivel de significancia (\( \alpha \)) es 0.05.
+        - Grados de libertad: 6 (número de categorías - 1).
+        - Valor crítico chi-cuadrado para α=0.05 y 6 grados de libertad: 12.5916.
+        - Se imprime si los números generados provienen de una distribución uniforme o no.
+
+Este código es útil para evaluar la calidad de un generador pseudoaleatorio analizando la distribución de patrones en los dígitos generados.
+"""
