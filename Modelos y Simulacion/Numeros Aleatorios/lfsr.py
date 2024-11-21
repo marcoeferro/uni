@@ -12,8 +12,8 @@ def rng_number(seed, taps):
         seed[idx] = seed[idx - 1]
 
     seed[0] = xor_bit
-    print(f"OLD SEED {seed}")
-    print(output)
+    # print(f"OLD SEED {seed}")
+    # print(output)
     return output
 
 def generate_multiple(n, seed, taps):
@@ -25,7 +25,7 @@ def generate_multiple(n, seed, taps):
             digits.append(output)
         
         decimal = int(''.join(map(str, digits)), 2)
-        # print(f"El número aleatorio {i + 1} en decimal es: {decimal}")
+        print(f"El número aleatorio {i + 1} en decimal es: {decimal}")
         digits = []
 
-generate_multiple(seed=1001, n=5, taps=[2, 3])
+generate_multiple(seed=1001, n=10, taps=[2, 3])
