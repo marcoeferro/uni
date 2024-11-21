@@ -36,12 +36,7 @@ se ajusta a una distribución uniforme.
 El estadístico de Kolmogorov-Smirnov se utiliza para medir la máxima diferencia entre 
 la distribución acumulada teórica y la empírica. Un valor bajo del estadístico sugiere 
 que la muestra se ajusta bien a la distribución uniforme.
-
-**Nota:** Para realizar una prueba de hipótesis formal, se necesitaría comparar el valor 
-del estadístico KS con un valor crítico obtenido de una tabla o utilizando un software estadístico.
 """
-
-
 
 sample_size = 10
 lcg = Congruencial.Congruencial(seed=12345)
@@ -60,6 +55,6 @@ d = get_ks_value(sample_size=sample_size,alpha=0.05)
 
 print(f"d_alpha statistic: {d}")
 
-coso = kolmogorov_smirnov_table()
-print(coso[0.10][1])
+test = kolmogorov_smirnov_table()
+print(test[0.10][1])
 print(f"Los NUMEROS provienen de una distribucion uniforme") if ks_statistic < d else print(f"Los NUMEROS no provienen de una distribucion uniforme") 
