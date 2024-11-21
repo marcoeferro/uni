@@ -3,3 +3,6 @@
 
 # Ignorar todas las carpetas __pycache__ en cualquier parte del proyecto
 **/__pycache__/
+
+# Ignorar todas los archivos csv
+**/*.csv/
