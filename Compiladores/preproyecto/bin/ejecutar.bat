@@ -1,2 +1,0 @@
-c:; cd 'c:\Users\Lauty\Desktop\JAVA\preproyectoCompiladores\preproyecto'; & 'C:\Program Files\Java\jdk-22\bin\java.exe' '@C:\Users\Lauty\AppData\Local\Temp\cp_3apnka9dvmj56xwox4fj1j3z9.argfile' 'App' 'src\test.txt'
-pause
