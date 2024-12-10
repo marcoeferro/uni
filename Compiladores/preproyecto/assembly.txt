@@ -1,0 +1,23 @@
+main:
+pushq %rbp
+movq %rsp, %rbp
+movl $10, -48(%rbp)
+movq $25, %rax
+imulq $3, %rax
+movq %rax, -80(%rbp)
+movq $30, %rax
+imulq $2, %rax
+movq %rax, -96(%rbp)
+movq -80(%rbp), %rax
+addq -96(%rbp), %rax
+movq %rax, -112(%rbp)
+movq -112(%rbp), %rax
+movq %rax, -64(%rbp)
+movq $50, %rax
+addq -32(%rbp), %rax
+movq %rax, -144(%rbp)
+movq -144(%rbp), %rax
+movq %rax, -128(%rbp)
+movq -16(%rbp), %rax
+popq %rbp
+ret

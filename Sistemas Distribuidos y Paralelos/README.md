@@ -6,10 +6,12 @@
 3. [Instalación y Configuración](#instalación-y-configuración)
    - [Requisitos Previos](#requisitos-previos)
    - [Clonar el Repositorio](#clonar-el-repositorio)
+   - [Instalacion de Dependecias](#instalacion-de-dependencias)
+      - [ETL Service](#etl-service)
+      - [CRUD Service](#crud-service)
 4. [Estructura del Proyecto](#estructura-del-proyecto)
 5. [Uso de los Servicios](#uso-de-los-servicios)
    - [ETL Service](#etl-service)
-   - [Scheduler Service](#scheduler-service)
    - [CRUD Service](#crud-service)
 6. [Arquitectura del Proyecto](#arquitectura-del-proyecto)
 7. [Contribución](#contribución)
@@ -25,15 +27,13 @@ Este proyecto consiste en un sistema de microservicios que facilita la extracci�
 - **Python**: Para la lógica del backend.
 - **SQLite**: Base de datos ligera utilizada para el almacenamiento local.
 - **Flask**: Framework web para el desarrollo del API.
-- **SQLAlchemy**: ORM para la interacción con la base de datos.
-- **Apache Airflow**: Herramienta de programación y gestión de flujos de trabajo (Scheduler).
-- **Docker**: Para la contenedorización de los servicios.
+- **Requests**: Libreria de python para realizar requests a APIs.
 
 ## Instalación y Configuración
 
 ### Requisitos Previos
 Asegúrate de tener instalado:
-- **Docker**: Requerido para ejecutar los servicios de manera aislada y reproducible.
+- **Python**: Requerido para ejecutar los servicios.
 
 ### Clonar el Repositorio
 Para obtener el código fuente y comenzar con el proyecto, sigue los siguientes pasos:
@@ -42,39 +42,76 @@ Para obtener el código fuente y comenzar con el proyecto, sigue los siguientes 
 git clone https://github.com/marcoeferro/SistemasDistribuidos.git
 cd SistemasDistribuidos
 ```
+### instalacion de Dependencias
+Para los instalar las dependencias asegurate de estar en la carpeta SistemasDistribuidos
+#### ETL Service
+Para el **ETL Service** Sigue los siguientes pasos:
+Para Windows en cmd
+```bash
+cd elt-service
+python -m venv venv 
+.\venv\Scrips\activate.bat
+pip install -r requirements.txt
+```
+
+#### CRUD Service
+Para el **CRUD Service**  Sigue los siguientes pasos:
+Para Windows en cmd
+```bash
+cd CRUD-service
+python -m venv venv 
+.\venv\Scrips\activate.bat
+pip install -r requirements.txt
+```
 
 ## Estructura del Proyecto
 La estructura de carpetas de este proyecto es la siguiente:
 
 ```
 /SistemasDistribuidos
-├── /etl_service                # Servicio ETL
+├── /etl-service                # Servicio ETL
 │   ├── main.py                 # Lógica del ETL
 │   ├── requirements.txt        # Dependencias del servicio ETL
-├── /scheduler_service          # Servicio Scheduler
+├── /scheduler-service          # Servicio Scheduler
 │   ├── dag.py                  # Definición de flujos de trabajo en Airflow
 │   ├── requirements.txt        # Dependencias del servicio Scheduler
-├── /crud_service               # Servicio CRUD
+├── /CRUD-service               # Servicio CRUD
 │   ├── app.py                  # API RESTful para la gestión de datos
 │   ├── models.py               # Definición de modelos de base de datos
 │   ├── requirements.txt        # Dependencias del servicio CRUD
 ├── /docker                     # Archivos de configuración de Docker
-│   ├── docker-compose.yml      # Orquestación de los servicios en contenedores
+├── docker-compose.yml          # Orquestación de los servicios en contenedores
+├── LICENSE                     # Licencia MIT 
+├── scrapped_data.db            # Base de dato que contiene los datos escrapeados
 └── README.md                   # Documentación del proyecto
 ```
 
 ## Uso de los Servicios
 
 ### ETL Service
-El **ETL Service** es ejecutado de forma automática por el Scheduler, extrayendo, transformando y cargando los datos diariamente. No requiere intervención manual.
+Para ejecutar el **ETL Service** Sigue los siguientes pasos una vez que te encuentres en la carpeta de SistemasDistribuidos
+Para Windows en cmd
+```bash
+cd SistemasDistribuidos
+cd elt-service
+python run_etl_loop.py
+```
 
 ### Scheduler Service
-El **Scheduler Service** utiliza Apache Airflow para controlar las tareas ETL. Al iniciar su contenedor Docker, el servicio programará y gestionará la ejecución de las tareas.
+Fuera de servicio.
 
 ### CRUD Service
-El **CRUD Service** expone endpoints GET para consultar los datos procesados. La definición exacta de los endpoints estará disponible en futuras actualizaciones.
+Para ejecutar el **CRUD Service**  Sigue los siguientes pasos una vez que te encuentres en la carpeta de SIstemasDistribuidos
+Para Windows en cmd
+```bash
+cd SistemasDistribuidos
+cd CRUD-service
+python app.py
+```
+luego de esto deberas entrar a la direccion que aparece en la consola y a los endpoints correspondientes
 
 ## Arquitectura del Proyecto
+`disclaimer` : el proycto como se describe en este readme aun no esta finalizado por lo que existen partes de esta arquietectura que no estan disponibles.
 El proyecto utiliza una arquitectura basada en microservicios, donde cada servicio (ETL, Scheduler, CRUD) está contenedorizado usando Docker. Kubernetes o Docker Compose pueden utilizarse para orquestar los contenedores y facilitar la comunicación entre los servicios.
 
 La arquitectura permite:

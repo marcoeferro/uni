@@ -32,7 +32,7 @@ public class Ventana extends javax.swing.JFrame {
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
 
-        jButton1.setText("Analizar");
+        jButton1.setText("Cod3Dir");
         jButton1.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 jButton1ActionPerformed(evt);
@@ -45,7 +45,7 @@ public class Ventana extends javax.swing.JFrame {
 
         jText1.setColumns(20);
         jText1.setRows(5);
-        jText1.setText("int main(){int x;int y;x = 10 + 15;}");
+        jText1.setText("int main(){int x;int y;y = 25 * 3 + (30*2);x = 50+y;return x;}");
         jScrollPane2.setViewportView(jText1);
 
         jButton2.setText("Imagen");
@@ -117,11 +117,13 @@ public class Ventana extends javax.swing.JFrame {
 
             // Convertir el ArrayList en un solo String separado por saltos de línea
             StringBuilder sb = new StringBuilder();
-            for (String str : parser.texto) {
+            for (String str : parser.codeOutput) {
                 sb.append(str).append("\n");
             }
-
+            AssemblyGenerator.generateAssembly(parser.cod3dirList);
             jText2.setText(sb.toString());
+
+            System.out.println("el programa retorna: " + parser.returnValue);
 
         } catch (Exception exception) {
             System.out.println(exception.getMessage());

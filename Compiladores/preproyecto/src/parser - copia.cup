@@ -41,7 +41,6 @@ non terminal Nodo EXP;      //Expresion matematica
 non terminal Nodo BLOCK;     //Bloque de codigo
 non terminal Nodo TYPE;	//BOOL O INT
 non terminal Nodo VAR; //variable (auxiliar)
-non terminal Nodo COMP; //Comparacion que retorna un BOOL
 
 // Precedencia de operadores
 precedence left PLUS;
@@ -174,7 +173,7 @@ STATEMENT ::=
             
 			RESULT = tmp;
         :}
-    |   IF LPAREN COMP:e RPAREN LBRACE BLOCK:b RBRACE ELSE LBRACE BLOCK:b2 RBRACE {:
+    |   IF LPAREN EXP:e RPAREN LBRACE BLOCK:b RBRACE ELSE LBRACE BLOCK:b2 RBRACE {:
         parser.contador++;
         parser.texto.add("graphid:"+parser.contador+" # "+"if(exp) {block} else {block}");
         Nodo tmp = new Nodo(new Info("if-else",-1,null,null),parser.contador);
@@ -183,7 +182,7 @@ STATEMENT ::=
         tmp.addHijoDer(b2); // Bloque del else
         RESULT = tmp;
         :}
-    | IF LPAREN COMP:e RPAREN LBRACE BLOCK:b RBRACE {:
+    | IF LPAREN EXP:e RPAREN LBRACE BLOCK:b RBRACE {:
         parser.contador++;
         parser.texto.add("graphid:"+parser.contador+" # "+"if(exp) {block}");
         Nodo tmp = new Nodo(new Info("if",-1,null,null),parser.contador);
@@ -244,6 +243,54 @@ EXP ::=
                 parser.codeOutput.add(Cod3dir.genLine("MUL",a.info,b.info,tmp.info));
                 parser.cod3dirList.add(new Cod3dir("MUL",a.info,b.info,tmp.info));
                 //
+            }
+        :}
+    |   EXP:a GREATER EXP:b {:
+            parser.contador++;
+            parser.tmpNameCounter++;
+            // Verificar que ambos operandos son del mismo tipo y compatibles con desigualdad
+            if (!a.info.tipo.equals("entero") || !b.info.tipo.equals("entero")) {
+                throw new RuntimeException("Error: Tipos incompatibles en desigualdad. Ambos deben ser enteros.");
+            } else {
+                // Evaluar la expresión para obtener el resultado booleano
+                boolean resultadoDesigualdad = a.info.value > b.info.value;
+                parser.texto.add("graphid:"+parser.contador+" # "+"exp > exp");
+
+                // Crear un nuevo nodo con tipo "booleano"
+                Info tmpInfo = new Info("tmp" + parser.tmpNameCounter.toString(), Simbolo.GREATER, resultadoDesigualdad ? 1 : 0, "booleano", parser.offSetCounter);
+                parser.offSetCounter -= 16;
+                Nodo tmp = new Nodo(tmpInfo, parser.contador);
+                tmp.addHijoIzq(a);
+                tmp.addHijoDer(b);
+                RESULT = tmp;
+
+                // Código de tres direcciones (cod3dir) para la operación GREATER
+                parser.codeOutput.add(Cod3dir.genLine("GREATER", a.info, b.info, tmp.info));
+                parser.cod3dirList.add(new Cod3dir("GREATER", a.info, b.info, tmp.info));
+            }
+        :}
+    |   EXP:a LESS EXP:b {:
+            parser.contador++;
+            parser.tmpNameCounter++;
+            // Verificar que ambos operandos son del mismo tipo y compatibles con desigualdad
+            if (!a.info.tipo.equals("entero") || !b.info.tipo.equals("entero")) {
+                throw new RuntimeException("Error: Tipos incompatibles en desigualdad. Ambos deben ser enteros.");
+            } else {
+                // Evaluar la expresión para obtener el resultado booleano
+                boolean resultadoDesigualdad = a.info.value < b.info.value;
+                parser.texto.add("graphid:"+parser.contador+" # "+"exp < exp");
+
+                // Crear un nuevo nodo con tipo "booleano"
+                Info tmpInfo = new Info("tmp" + parser.tmpNameCounter.toString(), Simbolo.LESS, resultadoDesigualdad ? 1 : 0, "booleano", parser.offSetCounter);
+                parser.offSetCounter -= 16;
+                Nodo tmp = new Nodo(tmpInfo, parser.contador);
+                tmp.addHijoIzq(a);
+                tmp.addHijoDer(b);
+                RESULT = tmp;
+
+                // Código de tres direcciones (cod3dir) para la operación LESS
+                parser.codeOutput.add(Cod3dir.genLine("LESS", a.info, b.info, tmp.info));
+                parser.cod3dirList.add(new Cod3dir("LESS", a.info, b.info, tmp.info));
             }
         :}
     |   LPAREN EXP:e RPAREN {:
@@ -316,56 +363,5 @@ VAR ::=
             parser.offSetCounter = parser.offSetCounter - 16;
             RESULT = tmp;
 
-        :}
-;
-
-COMP ::=
-        EXP LESS EXP {:
-            parser.contador++;
-            parser.tmpNameCounter++;
-            // Verificar que ambos operandos son del mismo tipo y compatibles con desigualdad
-            if (!a.info.tipo.equals("entero") || !b.info.tipo.equals("entero")) {
-                throw new RuntimeException("Error: Tipos incompatibles en desigualdad. Ambos deben ser enteros.");
-            } else {
-                // Evaluar la expresión para obtener el resultado booleano
-                boolean resultadoDesigualdad = a.info.value < b.info.value;
-                parser.texto.add("graphid:"+parser.contador+" # "+"exp < exp");
-
-                // Crear un nuevo nodo con tipo "booleano"
-                Info tmpInfo = new Info("tmp" + parser.tmpNameCounter.toString(), Simbolo.LESS, resultadoDesigualdad ? 1 : 0, "booleano", parser.offSetCounter);
-                parser.offSetCounter -= 16;
-                Nodo tmp = new Nodo(tmpInfo, parser.contador);
-                tmp.addHijoIzq(a);
-                tmp.addHijoDer(b);
-                RESULT = tmp;
-
-                // Código de tres direcciones (cod3dir) para la operación LESS
-                parser.codeOutput.add(Cod3dir.genLine("LESS", a.info, b.info, tmp.info));
-                parser.cod3dirList.add(new Cod3dir("LESS", a.info, b.info, tmp.info));
-            }
-        :}
-    |   EXP GREATER EXP {:
-            parser.contador++;
-            parser.tmpNameCounter++;
-            // Verificar que ambos operandos son del mismo tipo y compatibles con desigualdad
-            if (!a.info.tipo.equals("entero") || !b.info.tipo.equals("entero")) {
-                throw new RuntimeException("Error: Tipos incompatibles en desigualdad. Ambos deben ser enteros.");
-            } else {
-                // Evaluar la expresión para obtener el resultado booleano
-                boolean resultadoDesigualdad = a.info.value > b.info.value;
-                parser.texto.add("graphid:"+parser.contador+" # "+"exp > exp");
-
-                // Crear un nuevo nodo con tipo "booleano"
-                Info tmpInfo = new Info("tmp" + parser.tmpNameCounter.toString(), Simbolo.GREATER, resultadoDesigualdad ? 1 : 0, "booleano", parser.offSetCounter);
-                parser.offSetCounter -= 16;
-                Nodo tmp = new Nodo(tmpInfo, parser.contador);
-                tmp.addHijoIzq(a);
-                tmp.addHijoDer(b);
-                RESULT = tmp;
-
-                // Código de tres direcciones (cod3dir) para la operación GREATER
-                parser.codeOutput.add(Cod3dir.genLine("GREATER", a.info, b.info, tmp.info));
-                parser.cod3dirList.add(new Cod3dir("GREATER", a.info, b.info, tmp.info));
-            }
         :}
 ;

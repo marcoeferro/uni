@@ -36,6 +36,9 @@ cadena  =   ([a-zA-Z]+[0-9]*)+
 "true"      { return new Symbol(Simbolo.TRUE, yyline, yycolumn); }
 "false"     { return new Symbol(Simbolo.FALSE, yyline, yycolumn); }
 "return"     { return new Symbol(Simbolo.RETURN, yyline, yycolumn); }
+"if"     { return new Symbol(Simbolo.IF, yyline, yycolumn); }
+"else"     { return new Symbol(Simbolo.ELSE, yyline, yycolumn); }
+"while"     { return new Symbol(Simbolo.WHILE, yyline, yycolumn); }
 
 
 // Delimitadores
@@ -49,6 +52,8 @@ cadena  =   ([a-zA-Z]+[0-9]*)+
 // Operadores
 "+"         { return new Symbol(Simbolo.PLUS, yyline, yycolumn); }
 "*"         { return new Symbol(Simbolo.STAR, yyline, yycolumn); }
+"<"         { return new Symbol(Simbolo.LESS, yyline, yycolumn); }
+">"         { return new Symbol(Simbolo.GREATER, yyline, yycolumn); }
 
 // Identificadores y números
 {cadena}  { return new Symbol(Simbolo.ID, yyline, yycolumn, yytext()); }

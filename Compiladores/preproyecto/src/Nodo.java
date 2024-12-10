@@ -6,7 +6,6 @@ public class Nodo {
     public int graphId;
 
     public Nodo(){
-
     }
 
     public Nodo(Info info,int id){

@@ -9,9 +9,11 @@ public class VisualizadorArbol {
             textAux.addAll(VisualizadorArbol.recorridoInOrden(actual.izq));
             textAux.add(actual.graphId+ " -> "+actual.izq.graphId);
         }
-
-        textAux.add(actual.graphId+" [label="+actual.info.nombre+"];");
-
+        String nombre = actual.info.nombre;
+        if(actual.info.etiqueta == 11) nombre = "\"+\"";
+        if(actual.info.etiqueta == 12) nombre = "\"*\"";
+        if(actual.info.etiqueta == 6) nombre = "return";
+        textAux.add(actual.graphId+" [label="+nombre+"];");
         if(actual.der != null){
             textAux.addAll(VisualizadorArbol.recorridoInOrden(actual.der));
             textAux.add(actual.graphId+ " -> "+actual.der.graphId);
