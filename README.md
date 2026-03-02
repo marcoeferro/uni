@@ -4,51 +4,21 @@ Bienvenido al repositorio de contenidos de código de la universidad. Este repos
 
 ## Índice
 
-- Descripción
-- Estructura del Repositorio
-- Requisitos
-- Instalación
-- Uso
-- Contribuciones
-- Issues
-- Licencia
-- Autores
+- [Descripción](#descripción)
+- [Requisitos](#requisitos)
+- [Uso](#uso)
+- [Contribuciones](#contribuciones)
+- [Issues](#issues)
+- [Licencia](#licencia)
 
 ## Descripción
 
-Este repositorio agrupa todos los contenidos en código utilizados en los cursos de la universidad. Incluye proyectos de diversas asignaturas, ejercicios prácticos y ejemplos de código que pueden ser útiles para el estudio y la práctica.
-
-## Estructura del Repositorio
-
-La estructura del repositorio es la siguiente:
-
-````
-├── Asignatura1/
-│   ├── Proyecto1/
-│   ├── Ejercicio1/
-│   └── Ejemplo1/
-├── Asignatura2/
-│   ├── Proyecto2/
-│   ├── Ejercicio2/
-│   └── Ejemplo2/
-└── README.md
-````
+Este repositorio agrupa todos los contenidos utilizados en los cursos de la universidad. Incluye proyectos de diversas asignaturas, ejercicios prácticos y ejemplos de código que pueden ser útiles para el estudio y la práctica. 
 
 ## Requisitos
 
 - [Estilo de Commit](https://www.conventionalcommits.org/en/v1.0.0/)
 - [Estilo de Pull Request](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/getting-started/best-practices-for-pull-requests)
-
-## Instalación
-
-1. Clona el repositorio:
-    ```bash
-    git clone https://github.com/marcoeferro/uni.git
-    ```
-2. Navega al directorio del proyecto:
-    ```bash
-    cd uni
-    ```
 
 ## Uso
 
@@ -70,8 +40,7 @@ Si encuentras algún problema o tienes alguna sugerencia, por favor abre un issu
 
 1. Ve a la pestaña "Issues" en el repositorio.
 2. Haz clic en "New Issue".
-3. Describe el problema o la sugerencia con la mayor cantidad de detalles posible.
-4. Asigna etiquetas relevantes y, si es necesario, asigna el issue a una persona específica.
+3. Elije el  tipo de issue que queres (bug repport, documentation, feature request).
 
 ## Licencia
 
@@ -85,8 +54,3 @@ This work is licensed under a
 [cc-by-nc-sa]: http://creativecommons.org/licenses/by-nc-sa/4.0/
 [cc-by-nc-sa-image]: https://licensebuttons.net/l/by-nc-sa/4.0/88x31.png
 [cc-by-nc-sa-shield]: https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg
-
-## Autores
-
-- Marco Ferro
-- Lautaro Galeano
