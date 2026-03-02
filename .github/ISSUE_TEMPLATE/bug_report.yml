@@ -1,0 +1,42 @@
+name: Bug Report
+description: Reporta un error en el proyecto
+title: "[BUG] Breve descripción"
+labels: ["bug"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por reportar un bug. Completa la información abajo.
+
+  - type: input
+    id: summary
+    attributes:
+      label: Resumen
+      description: Breve descripción del error
+      placeholder: "Ejemplo: Error al guardar producto"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pasos para reproducir
+      description: Describe cómo reproducir el error
+      placeholder: "1. Ir a...\n2. Hacer clic en...\n3. Ver error"
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportamiento esperado
+      description: Qué debería pasar
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Entorno
+      description: SO, versión, navegador, etc.

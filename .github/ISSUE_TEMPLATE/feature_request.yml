@@ -1,0 +1,33 @@
+name: Feature Request
+description: Sugiere una nueva funcionalidad
+title: "[FEATURE] Breve descripción"
+labels: ["enhancement"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por tu propuesta. Completa la información abajo.
+
+  - type: input
+    id: summary
+    attributes:
+      label: Resumen
+      description: Breve descripción de la funcionalidad
+      placeholder: "Ejemplo: Exportar productos a PDF"
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivación
+      description: ¿Por qué es útil esta funcionalidad?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas consideradas
+      description: ¿Qué otras soluciones pensaste?

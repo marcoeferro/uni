@@ -1,0 +1,9 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: Preguntas frecuentes
+    url: https://tu-sitio.com/faq
+    about: Revisa las preguntas frecuentes antes de abrir un issue.
+  - name: Soporte técnico
+    url: https://tu-sitio.com/support
+    about: Si tu problema no es un bug ni una feature request, consulta aquí.

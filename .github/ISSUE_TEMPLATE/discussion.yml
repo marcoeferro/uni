@@ -1,0 +1,55 @@
+name: 💬 Discussion
+description: Usa este template para iniciar una conversación, lluvia de ideas o debate abierto.
+title: "[Discussion] "
+labels:
+  - discussion
+  - needs-triage
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por abrir una discusión. Usa este espacio para compartir ideas, preguntas o propuestas.
+        Recuerda mantener un tono respetuoso y constructivo.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Contexto
+      description: Explica brevemente el tema que quieres discutir y por qué es relevante.
+      placeholder: Ejemplo: "Quiero discutir cómo mejorar la documentación del proyecto..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: ideas
+    attributes:
+      label: Ideas o puntos de debate
+      description: Lista tus ideas, hipótesis o preguntas iniciales.
+      placeholder: |
+        - ¿Deberíamos usar otra librería?
+        - ¿Cómo mejorar la experiencia de usuario?
+    validations:
+      required: false
+
+  - type: textarea
+    id: references
+    attributes:
+      label: Recursos o referencias
+      description: Comparte enlaces, artículos o ejemplos que apoyen la discusión.
+      placeholder: "https://ejemplo.com/articulo"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: urgency
+    attributes:
+      label: Nivel de urgencia
+      description: ¿Qué tan pronto debería abordarse esta discusión?
+      options:
+        - Baja
+        - Media
+        - Alta
+    validations:
+      required: false

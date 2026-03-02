@@ -1,0 +1,27 @@
+name: Documentation
+description: Reporta errores o mejoras en la documentación
+title: "[DOC] Breve descripción"
+labels: ["documentation"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ayúdanos a mejorar la documentación.
+
+  - type: input
+    id: section
+    attributes:
+      label: Sección afectada
+      description: ¿Qué parte de la documentación hay que mejorar?
+      placeholder: "Ejemplo: README - Instalación"
+    validations:
+      required: true
+
+  - type: textarea
+    id: improvement
+    attributes:
+      label: Propuesta de mejora
+      description: Explica qué debería cambiarse o agregarse
+    validations:
+      required: true
