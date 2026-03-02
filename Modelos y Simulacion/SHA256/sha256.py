@@ -82,3 +82,66 @@ def sha256(message):
 # Prueba del algoritmo
 mensaje = "abc"
 print("Hash SHA-256:", sha256(mensaje))
+
+
+"""
+Este script implementa una versión educativa y compacta del algoritmo de hash SHA-256.
+
+1) Importación y constantes:
+   - Se importa 'struct' para empacar/desempacar bytes en enteros y viceversa.
+   - 'K' define los 64 valores constantes específicos del estándar SHA-256, usados en cada ronda
+     del proceso de compresión.
+
+2) Función auxiliar: rotación a la derecha (rotr):
+   - rotr(x, n, w=32) realiza una rotación a la derecha de 'x' por 'n' bits en un ancho de 32 bits.
+   - Combina desplazamiento y enmascarado para simular aritmética de 32 bits (mod 2^32).
+
+3) Función sha256_compress(chunk, H):
+   - Entrada:
+     * 'chunk': bloque de 64 bytes del mensaje preprocesado.
+     * 'H': lista de 8 enteros de 32 bits que representan el estado actual del hash.
+   - Extensión del mensaje (W):
+     * Desempaqueta 'chunk' en 16 palabras de 32 bits (big-endian).
+     * Genera 64 palabras totales (W[0..63]), donde W[16..63] se calculan con las funciones
+       σ0 y σ1 (pequeñas sigmas) conforme al estándar:
+         s0 = rotr(W[t-15], 7) ^ rotr(W[t-15], 18) ^ (W[t-15] >> 3)
+         s1 = rotr(W[t-2], 17) ^ rotr(W[t-2], 19) ^ (W[t-2] >> 10)
+       * Cada nueva palabra se limita a 32 bits con & 0xFFFFFFFF.
+   - Inicializa variables de trabajo (a..h) copiando H.
+   - 64 rondas de compresión:
+     * Calcula funciones:
+         S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25)   (Σ1 grande)
+         ch = (e & f) ^ (~e & g)                        (choose)
+         S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22)    (Σ0 grande)
+         maj = (a & b) ^ (a & c) ^ (b & c)              (majority)
+     * temp1 = h + S1 + ch + K[t] + W[t] (mod 2^32)
+     * temp2 = S0 + maj (mod 2^32)
+     * Actualiza el estado (a..h) desplazando y combinando temp1 y temp2.
+   - Actualización del hash:
+     * Suma (mod 2^32) cada registro a..h al estado H original y devuelve el nuevo H.
+
+4) Preprocesamiento: sha256_padding(message):
+   - Convierte el 'message' (string ASCII) a 'bytearray'.
+   - Calcula la longitud original en bits.
+   - Añade el byte 0x80 (bit '1' seguido de ceros).
+   - Rellena con ceros hasta que la longitud sea congruente a 56 mod 64 (dejando 8 bytes finales).
+   - Añade 8 bytes (big-endian) con la longitud original en bits.
+   - Devuelve el mensaje preparado en bloques de 64 bytes.
+
+5) Función principal: sha256(message):
+   - Inicializa H con los 8 valores iniciales estándar de SHA-256.
+   - Aplica el padding al mensaje para obtener 'padded_message'.
+   - Itera sobre 'padded_message' en pasos de 64 bytes:
+     * Para cada 'chunk', llama a sha256_compress y actualiza H.
+   - Devuelve el hash final como cadena hexadecimal de 64 caracteres (8 enteros de 32 bits).
+
+6) Prueba:
+   - Define 'mensaje = "abc"'.
+   - Imprime "Hash SHA-256:" seguido del resultado de sha256("abc").
+
+Notas:
+- Esta implementación sigue el flujo estándar de SHA-256: padding → división en bloques →
+  extensión del mensaje → 64 rondas por bloque → actualización del estado.
+- Todas las operaciones se limitan a 32 bits para replicar el comportamiento de la aritmética modular
+  requerida por SHA-256.
+"""

@@ -182,3 +182,80 @@ ejecutar_simulaciones(3, parametros_simulacion)
 
 
 print("Simulaciones completadas y resultados guardados en 'resultados_simulacion.csv'.")
+
+
+"""
+Este script simula una cola de atención con múltiples servidores usando SimPy, 
+genera clientes con tiempos exponenciales de llegada y servicio, registra métricas 
+por cliente y guarda resultados en CSV con IDs persistentes.
+
+1) Imports y utilidades:
+   - simpy: motor de simulación de eventos discretos (tiempo virtual).
+   - random: genera variables aleatorias (exponenciales para llegadas/servicios).
+   - csv: escritura de resultados tabulares.
+   - datetime.timedelta: formatea tiempos en HH:MM:SS.
+   - pathlib.Path: rutas portables del archivo CSV.
+   - formato_hora(segundos): convierte segundos a "HH:MM:SS" redondeando.
+
+2) Proceso de cliente: cliente(env, nombre, servidores, tasa_servicio, datos_cliente)
+   - Registra la hora de llegada (env.now).
+   - Calcula tiempo entre llegadas usando datos_cliente['ultima_llegada'] y actualiza ese valor.
+   - Calcula longitud del sistema: tamaño de la cola + servidores ocupados (servidores.count).
+   - Solicita un recurso (servidores.request()):
+     * Al hacer 'yield req', el cliente espera si no hay servidor libre.
+   - Mide tiempo en cola: env.now - llegada al obtener el servidor.
+   - Genera tiempo de servicio ~ Exponencial(tasa_servicio) y avanza el reloj: yield env.timeout(tiempo_servicio).
+   - Registra métricas del cliente en datos_cliente['clientes']:
+     * ID de simulación, número de cliente, hora de llegada/inicio/fin (formateadas),
+       tiempos (entre llegada, en cola, servicio, en el sistema),
+       y estados del sistema (longitud de la cola/sistema) en su llegada.
+
+3) Generación de clientes: generar_clientes(env, tasa_llegada, tasa_servicio, servidores, datos_cliente)
+   - Bucle infinito:
+     * Espera un tiempo interarribo ~ Exponencial(tasa_llegada): yield env.timeout(...)
+     * Incrementa contador i y lanza un nuevo proceso cliente con env.process(...).
+
+4) Simulación principal: simulacion(tasa_llegada, tasa_servicio, n_servidores, tiempo_simulacion, id_simulacion)
+   - Crea el entorno: env = simpy.Environment().
+   - Define el recurso servidores con capacidad n_servidores (servidores paralelos).
+   - Prepara contenedor de datos: {'ultima_llegada': None, 'clientes': [], 'id_simulacion': id_simulacion}.
+   - Inicia el generador de clientes como proceso de SimPy.
+   - Ejecuta la simulación hasta tiempo_simulacion: env.run(until=...).
+   - Retorna la lista de registros de clientes.
+
+5) Persistencia en CSV: guardar_resultados_csv(datos_clientes, archivo_csv)
+   - Define columnas esperadas en el CSV.
+   - Usa la carpeta del script (Path(__file__).parent) para construir la ruta del CSV.
+   - Si el archivo no existe, escribe encabezado; luego agrega filas con DictWriter.
+   - Permite acumulación de resultados en ejecuciones sucesivas.
+
+6) Conversión de parámetros legibles: convertir_parametros(...)
+   - Convierte horas 'HH:MM:SS' a segundos desde medianoche.
+   - Calcula tiempo_simulacion = hora_fin_segundos - hora_inicio_segundos.
+   - Convierte tasas por hora a tasas por segundo:
+     * tasa_llegada = clientes_por_hora / 3600
+     * tasa_servicio = capacidad_servicio_por_hora / 3600
+   - Devuelve dict con parámetros en segundos/tasas y n_servidores.
+
+7) Gestión de IDs de simulación: obtener_ultimo_id_simulacion(archivo_csv)
+   - Si el CSV no existe, retorna 0 (empezará en 1).
+   - Si existe, lee la columna 'ID de simulación' y retorna el máximo, o 0 si no hay filas.
+   - Permite continuidad de IDs entre ejecuciones para trazabilidad.
+
+8) Ejecución múltiple y guardado: ejecutar_simulaciones(cantidad_simulaciones, parametros, archivo_csv)
+   - Determina primer_id = obtener_ultimo_id_simulacion(...) + 1.
+   - Para cada id_simulacion en el rango, ejecuta simulacion(...) con los parámetros
+     y guarda los resultados inmediatamente en CSV (append).
+   - Desacopla simulación y persistencia, facilitando reanudación y auditoría.
+
+9) Parámetros y ejecución:
+   - Convierte una jornada (08:00–16:00), con 10 clientes/hora y capacidad de 12 servicios/hora, 2 servidores.
+   - Ejecuta 3 simulaciones consecutivas, acumulando resultados y manteniendo IDs continuos.
+   - Mensaje final indica que se guardó en 'resultados_simulacion.csv'.
+
+Notas clave de modelado:
+- Interarribo y servicio con distribución exponencial (proceso de Poisson/M/M/c).
+- 'servidores' es un recurso con capacidad c: colas FIFO, servicio paralelo.
+- Todas las métricas se registran por cliente para análisis de desempeño (cola, servicio, sistema).
+- CSV en la carpeta del script con encabezado único y anexado de filas para rastreo histórico.
+"""
