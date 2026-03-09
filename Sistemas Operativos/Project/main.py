@@ -5,35 +5,34 @@ SISTEMAS OPERATIVOS — Demostración completa (compatible Windows)
 Consignas cubiertas:
   1. Creación de procesos (multiprocessing.Process) e hilos (threading.Thread)
   2. Comunicación mediante PIPE (multiprocessing.Pipe)
-  3. Sincronización mediante Spinlock (mutex) implementado desde cero
-     usando ctypes para la operación atómica Compare-And-Swap (CAS),
-     SIN semáforos, Locks ni colas de la stdlib.
+  3. Sincronización con DOS mecanismos implementados desde cero:
+       a) SpinLock  → mutex puro, CAS atómico vía ctypes (sin stdlib)
+       b) Semáforo  → contador + SpinLock interno (sin threading.Semaphore)
+          Se demuestra el bloqueo WAIT / SIGNAL de forma explícita y visible.
 
 ¿Por qué multiprocessing en vez de os.fork()?
-  os.fork() es exclusivo de Unix/Linux/macOS.
-  En Windows el sistema operativo NO permite clonar un proceso en mitad
-  de su ejecución; en cambio, multiprocessing.Process lanza un proceso
-  nuevo desde cero importando este mismo módulo, que es el mecanismo
-  nativo de Windows (y también funciona en Linux/macOS).
-  Por eso es OBLIGATORIO proteger el punto de entrada con:
-      if __name__ == "__main__":
-  Sin esa guardia, Windows entraría en un bucle infinito creando procesos.
+  os.fork() es exclusivo de Unix/Linux/macOS. En Windows no existe.
+  multiprocessing.Process lanza un proceso nuevo desde cero, que es el
+  mecanismo nativo de Windows y también funciona en Linux/macOS.
+  La guardia  if __name__ == "__main__":  es OBLIGATORIA en Windows para
+  que el proceso hijo no vuelva a ejecutar el código de creación.
 
-Flujo general:
-  ┌─────────────────────────────────────────┐
-  │  Proceso PADRE                          │
-  │  ├─ Hilo Productor 1  ─┐               │
-  │  ├─ Hilo Productor 2  ─┼─► PIPE ──►  Proceso HIJO (Consumidor)
-  │  └─ Hilo Productor 3  ─┘               │
-  └─────────────────────────────────────────┘
-
-  • El PIPE es creado con multiprocessing.Pipe(), que devuelve dos
-    objetos Connection: uno para enviar y otro para recibir.
-  • Los hilos productores comparten el extremo de escritura dentro del
-    proceso padre; el proceso hijo recibe el extremo de lectura como
-    argumento al ser creado.
-  • El spinlock protege el extremo de escritura para que los hilos no
-    escriban simultáneamente y corrompan los mensajes.
+Flujo de la demostración:
+  ┌──────────────────────────────────────────────────────┐
+  │  Proceso PADRE                                       │
+  │                                                      │
+  │  [FASE 1 — Semáforo con capacidad 1]                 │
+  │    Hilo A ──► entra, trabaja 2 s, hace SIGNAL        │
+  │    Hilo B ──► llega, ve semáforo=0, queda BLOQUEADO  │
+  │               ... espera el SIGNAL de A ...          │
+  │               entra, trabaja, hace SIGNAL            │
+  │    Hilo C ──► idem, bloqueado hasta que B hace signal│
+  │                                                      │
+  │  [FASE 2 — Productores / Consumidor con Pipe]        │
+  │    Hilo Prod-1 ─┐                                    │
+  │    Hilo Prod-2 ─┼──► [PIPE] ──► Proceso HIJO        │
+  │    Hilo Prod-3 ─┘         (Consumidor)               │
+  └──────────────────────────────────────────────────────┘
 ========================================================================
 """
 
@@ -47,57 +46,50 @@ import ctypes.util
 import multiprocessing
 
 
-# ========================================================================
-# BLOQUE 1: SPINLOCK — Mutex implementado desde cero con CAS atómico
-# ========================================================================
+# ════════════════════════════════════════════════════════════════════════
+# BLOQUE 1: SpinLock — mutex implementado desde cero con CAS atómico
+# ════════════════════════════════════════════════════════════════════════
 #
-# Concepto de mutex (mutual exclusion):
-#   Garantiza que solo UN hilo a la vez ejecute la "sección crítica"
-#   (el bloque de código que accede a un recurso compartido).
+# ¿Qué es un mutex?
+#   Garantiza exclusión mutua: solo UN hilo a la vez puede estar en la
+#   "sección crítica" (el código que toca un recurso compartido).
 #
-# Concepto de spinlock:
-#   Variante de mutex donde el hilo que no puede entrar simplemente
-#   "gira" en un bucle (busy-wait) revisando el estado, en vez de
-#   bloquearse y ceder la CPU al scheduler.
-#   Ventaja: latencia muy baja cuando la espera es corta.
-#   Desventaja: desperdicia CPU si la espera es larga.
+# ¿Qué es un spinlock?
+#   Implementación de mutex donde el hilo que no puede entrar gira en un
+#   bucle (busy-wait) en lugar de bloquearse y ceder la CPU.
 #
-# Operación CAS (Compare-And-Swap):
-#   Lee el valor de una variable y, si es igual al esperado, lo
-#   reemplaza con el nuevo valor — TODO en una sola instrucción de CPU
-#   (CMPXCHG en x86). Esto hace que la "comparación + escritura" sea
-#   indivisible, eliminando race conditions.
-#
-# En Windows, la función CAS se expone a través de la API de Win32
-# como InterlockedCompareExchange, accesible vía kernel32.
-# En Linux/macOS se usa __atomic_compare_exchange_n de libc/GCC.
-# ========================================================================
+# ¿Qué es CAS (Compare-And-Swap)?
+#   Una instrucción de CPU que de forma ATÓMICA (indivisible):
+#     Lee el valor actual de una variable.
+#     Si es igual al valor esperado → lo reemplaza por el nuevo valor.
+#   Así dos hilos no pueden adquirir el lock al mismo tiempo.
+#   En x86 la instrucción es CMPXCHG; en ARM es LDREX/STREX.
+#   Windows la expone como InterlockedCompareExchange (kernel32).
+#   Linux/macOS como __atomic_compare_exchange_n (libc/GCC).
+# ════════════════════════════════════════════════════════════════════════
 
 def _cargar_cas_windows():
     """
-    Carga InterlockedCompareExchange de kernel32 (Windows).
+    Carga InterlockedCompareExchange de la API Win32 (kernel32.dll).
 
-    Esta función de la API Win32 implementa CAS de 32 bits:
+    Firma en C:
       LONG InterlockedCompareExchange(LONG* dest, LONG exchange, LONG comparand)
-      Si *dest == comparand  →  *dest = exchange  →  retorna comparand (éxito)
-      Si no                  →  no cambia nada    →  retorna *dest     (fallo)
+      Si *dest == comparand  →  escribe exchange en *dest  →  retorna comparand
+      Si no                  →  no cambia nada             →  retorna *dest
 
     Returns
     -------
-    cas_win : ctypes function | None
-        Función CAS lista para usar, o None si falla la carga.
+    function | None
     """
     try:
-        kernel32 = ctypes.windll.kernel32
-        cas_win = kernel32.InterlockedCompareExchange
-        # Definimos la firma para que ctypes haga el marshaling correcto
-        cas_win.restype  = ctypes.c_long
-        cas_win.argtypes = [
-            ctypes.POINTER(ctypes.c_long),  # dest      → puntero a la variable
-            ctypes.c_long,                  # exchange  → valor a escribir si hay match
-            ctypes.c_long,                  # comparand → valor esperado actual
+        cas = ctypes.windll.kernel32.InterlockedCompareExchange
+        cas.restype  = ctypes.c_long
+        cas.argtypes = [
+            ctypes.POINTER(ctypes.c_long),  # dest
+            ctypes.c_long,                  # exchange  (valor a escribir)
+            ctypes.c_long,                  # comparand (valor esperado)
         ]
-        return cas_win
+        return cas
     except Exception:
         return None
 
@@ -106,22 +98,20 @@ def _cargar_cas_unix():
     """
     Carga __atomic_compare_exchange_n de libc (Linux / macOS).
 
-    La firma en C es:
+    Firma en C:
       bool __atomic_compare_exchange_n(
           int* ptr, int* expected, int desired,
           bool weak, int success_order, int failure_order)
 
     Returns
     -------
-    cas_unix : ctypes function | None
-        Función CAS lista para usar, o None si falla la carga.
+    function | None
     """
     try:
-        nombre_libc = ctypes.util.find_library("c")
-        libc = ctypes.CDLL(nombre_libc, use_errno=True)
-        cas_unix = libc.__atomic_compare_exchange_n
-        cas_unix.restype  = ctypes.c_bool
-        cas_unix.argtypes = [
+        libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
+        cas = libc.__atomic_compare_exchange_n
+        cas.restype  = ctypes.c_bool
+        cas.argtypes = [
             ctypes.POINTER(ctypes.c_int),
             ctypes.POINTER(ctypes.c_int),
             ctypes.c_int,
@@ -129,379 +119,549 @@ def _cargar_cas_unix():
             ctypes.c_int,
             ctypes.c_int,
         ]
-        return cas_unix
+        return cas
     except Exception:
         return None
 
 
-# Detectamos la plataforma y cargamos la función CAS correspondiente
-_PLATAFORMA = sys.platform   # "win32", "linux", "darwin"
-
-if _PLATAFORMA == "win32":
-    _CAS_WIN  = _cargar_cas_windows()
-    _CAS_UNIX = None
-else:
-    _CAS_WIN  = None
-    _CAS_UNIX = _cargar_cas_unix()
-
-# ¿Tenemos alguna función CAS nativa disponible?
+_PLATAFORMA   = sys.platform
+_CAS_WIN      = _cargar_cas_windows() if _PLATAFORMA == "win32" else None
+_CAS_UNIX     = _cargar_cas_unix()    if _PLATAFORMA != "win32" else None
 _CAS_DISPONIBLE = (_CAS_WIN is not None) or (_CAS_UNIX is not None)
 
 
-class SimpleSpinLock:
+class SpinLock:
     """
-    Mutex (spinlock) implementado desde cero usando una operación CAS nativa.
+    Mutex (spinlock) implementado desde cero con CAS atómico nativo.
+
+    Estado interno: entero de 32 bits.
+      0 = libre   →  cualquier hilo puede adquirirlo
+      1 = ocupado →  los demás hilos girarán esperando
 
     En Windows usa InterlockedCompareExchange (kernel32).
     En Linux/macOS usa __atomic_compare_exchange_n (libc).
-    Si ninguno está disponible, usa un fallback con threading.Lock
-    (ya no es "desde cero", pero el programa sigue funcionando).
-
-    Attributes
-    ----------
-    _estado_win : ctypes.c_long  (solo Windows)
-        Variable de estado: 0 = libre, 1 = ocupado.
-    _estado_unix : ctypes.c_int  (solo Unix)
-        Variable de estado: 0 = libre, 1 = ocupado.
+    Fallback con threading.Lock si ningún CAS está disponible.
     """
 
     def __init__(self):
-        """Inicializa el spinlock en estado libre (0)."""
+        """Crea el spinlock en estado libre (0)."""
         if _CAS_WIN is not None:
-            # Windows: c_long (32 bits con signo) requerido por kernel32
-            self._estado_win = ctypes.c_long(0)
+            self._v = ctypes.c_long(0)   # c_long requerido por kernel32
         elif _CAS_UNIX is not None:
-            # Unix: c_int (32 bits con signo) requerido por libc
-            self._estado_unix = ctypes.c_int(0)
+            self._v = ctypes.c_int(0)    # c_int  requerido por libc
         else:
-            # Ningún CAS nativo disponible → fallback
-            self._lock_fallback = threading.Lock()
+            self._fb = threading.Lock()  # fallback
 
     def acquire(self):
         """
-        Adquiere el spinlock; bloquea girando hasta lograrlo.
+        Intenta adquirir el lock girando hasta lograrlo.
 
-        Lógica del spin:
-          Bucle infinito. En cada iteración se intenta CAS(0 → 1).
-            · Si CAS tiene éxito → somos los dueños → retornamos.
-            · Si CAS falla       → alguien más lo tiene → seguimos girando.
-          time.sleep(0) cede la CPU voluntariamente en cada vuelta
-          (equivalente a pthread_yield en Unix o SwitchToThread en Win32).
+        Cada iteración ejecuta CAS(esperado=0, deseado=1):
+          · Éxito  → somos dueños → retornamos
+          · Fallo  → alguien más lo tiene → seguimos girando
+        time.sleep(0) cede la CPU en cada vuelta (yield).
         """
         if _CAS_WIN is not None:
-            # InterlockedCompareExchange retorna el valor ANTERIOR de *dest.
-            # Si el anterior era 0 → estaba libre → CAS tuvo éxito → adquirido.
             while True:
-                anterior = _CAS_WIN(
-                    ctypes.byref(self._estado_win),  # &_estado
-                    1,   # exchange  → queremos escribir 1 (ocupado)
-                    0    # comparand → solo cambia si encontramos 0 (libre)
-                )
-                if anterior == 0:
-                    return   # ← estaba libre, ahora es nuestro
-                time.sleep(0)   # yield para no quemar CPU
-
+                # Retorna el valor ANTERIOR; si era 0 → éxito
+                if _CAS_WIN(ctypes.byref(self._v), 1, 0) == 0:
+                    return
+                time.sleep(0)
         elif _CAS_UNIX is not None:
             esperado = ctypes.c_int(0)
             while True:
-                esperado.value = 0   # reiniciamos antes de cada intento
-                exito = _CAS_UNIX(
-                    ctypes.byref(self._estado_unix),
-                    ctypes.byref(esperado),
-                    1,      # desired  → ocupado
-                    False,  # strong CAS (más confiable que weak)
-                    5, 5    # memory order seq_cst en acquire y release
-                )
-                if exito:
+                esperado.value = 0
+                if _CAS_UNIX(ctypes.byref(self._v), ctypes.byref(esperado),
+                             1, False, 5, 5):
                     return
                 time.sleep(0)
-
         else:
-            self._lock_fallback.acquire()
+            self._fb.acquire()
 
     def release(self):
         """
-        Libera el spinlock escribiendo 0 (libre) en la variable de estado.
+        Libera el lock escribiendo 0 en la variable de estado.
 
-        En x86/x64 y ARM una escritura alineada de 32 bits es atómica
-        a nivel de hardware, por lo que no necesita otra instrucción CAS
-        para el release (un store simple es suficiente).
+        En x86/ARM una escritura de 32 bits alineada es atómica
+        a nivel de hardware, por lo que no se necesita otra instrucción CAS.
         """
         if _CAS_WIN is not None:
-            self._estado_win.value = 0
+            self._v.value = 0
         elif _CAS_UNIX is not None:
-            self._estado_unix.value = 0
+            self._v.value = 0
         else:
-            self._lock_fallback.release()
+            self._fb.release()
 
 
-# ========================================================================
-# BLOQUE 2: PRODUCTOR — Se ejecuta en hilos del proceso padre
-# ========================================================================
+# ════════════════════════════════════════════════════════════════════════
+# BLOQUE 2: Semáforo — implementado desde cero usando SpinLock
+# ════════════════════════════════════════════════════════════════════════
 #
-# Cada hilo productor:
-#   1. Genera 5 mensajes con un número aleatorio.
-#   2. Simula trabajo con time.sleep (retardo variable).
-#   3. Adquiere el spinlock antes de enviar por el pipe.
-#   4. Envía el mensaje y libera el spinlock.
-#   5. Al terminar, envía la señal "FIN-N" al consumidor.
+# ¿Qué es un semáforo?
+#   Un contador entero no negativo con DOS operaciones atómicas:
 #
-# ¿Por qué necesitamos el spinlock en el pipe?
-#   multiprocessing.Connection.send() serializa objetos Python (pickle),
-#   pero si dos hilos llaman a send() al mismo tiempo sobre la MISMA
-#   conexión, los bytes de ambos mensajes pueden entremezclarse y
-#   corromperse. El spinlock garantiza acceso exclusivo.
-# ========================================================================
+#     wait()   (también llamada P, down, acquire):
+#       Si contador > 0  →  decrementa y continúa (sin bloqueo)
+#       Si contador == 0 →  el hilo queda BLOQUEADO hasta que alguien
+#                           haga signal y el contador vuelva a ser > 0.
+#
+#     signal() (también llamada V, up, release):
+#       Incrementa el contador.
+#       Si había hilos bloqueados en wait() → desbloquea UNO de ellos.
+#
+#   Diferencia con mutex:
+#     Un mutex es un semáforo binario (0 o 1) donde SOLO el hilo que
+#     hizo acquire puede hacer release.
+#     Un semáforo general puede tener valor > 1 y cualquier hilo
+#     puede hacer signal (incluso uno diferente al que hizo wait).
+#
+# Implementación aquí:
+#   contador   → cuántos hilos más pueden entrar sin bloquearse
+#   _lock      → SpinLock que protege el acceso al contador
+#   _esperando → lista de eventos (threading.Event) de hilos bloqueados
+#
+#   Usamos threading.Event solo como mecanismo de PAUSA del hilo
+#   (event.wait() bloquea; event.set() desbloquea).
+#   El control de quién entra, cuándo y en qué orden lo maneja
+#   NUESTRO código, no la stdlib.
+# ════════════════════════════════════════════════════════════════════════
 
-def productor(id_hilo: int, conn_escritura, mutex: SimpleSpinLock) -> None:
+class Semaforo:
     """
-    Función ejecutada por cada hilo productor.
+    Semáforo de conteo implementado desde cero.
 
-    Genera mensajes aleatorios, los envía por el pipe bajo protección
-    del spinlock, y al finalizar envía una señal de terminación.
+    Usa SpinLock propio para proteger el contador y threading.Event
+    como mecanismo de pausa/reanudación de hilos bloqueados.
+
+    Parameters
+    ----------
+    valor_inicial : int
+        Valor inicial del contador (cuántos hilos pueden entrar sin bloquearse).
+    """
+
+    def __init__(self, valor_inicial: int = 1):
+        """Inicializa el semáforo con el valor dado."""
+        if valor_inicial < 0:
+            raise ValueError("El valor inicial del semáforo no puede ser negativo")
+
+        # El contador determina cuántos hilos pueden pasar sin bloquearse.
+        # Si es 1 → semáforo binario (comportamiento similar a mutex).
+        # Si es N → hasta N hilos pueden estar en la sección crítica.
+        self._contador  = valor_inicial
+        self._lock      = SpinLock()   # protege el acceso a _contador y _esperando
+        self._esperando = []           # cola de eventos de hilos bloqueados
+
+    def wait(self, nombre_hilo: str = "") -> None:
+        """
+        Operación WAIT (también llamada P, down o acquire).
+
+        Si el contador es > 0: lo decrementa y retorna inmediatamente.
+        Si el contador es 0:   el hilo se BLOQUEA hasta recibir un signal.
+
+        Parameters
+        ----------
+        nombre_hilo : str
+            Nombre del hilo llamante (solo para los prints de diagnóstico).
+        """
+        # Creamos el evento ANTES de adquirir el lock para tenerlo listo
+        # en caso de que necesitemos bloquearnos.
+        mi_evento = threading.Event()
+
+        self._lock.acquire()
+        try:
+            if self._contador > 0:
+                # Hay "cupo" disponible → entramos sin bloquearnos
+                self._contador -= 1
+                # No necesitamos el evento → lo descartamos
+                return
+            else:
+                # No hay cupo → nos ponemos en la cola de espera
+                # y dejaremos que signal() nos desbloquee
+                self._esperando.append(mi_evento)
+                if nombre_hilo:
+                    print(f"  ⏸  {nombre_hilo} hace WAIT "
+                          f"→ semáforo=0, queda BLOQUEADO...")
+                    sys.stdout.flush()
+        finally:
+            # Liberamos el spinlock ANTES de bloquearnos en el evento.
+            # Si no lo hiciéramos, el hilo que intente hacer signal()
+            # quedaría atrapado esperando este mismo spinlock → deadlock.
+            self._lock.release()
+
+        # Aquí el hilo se BLOQUEA hasta que signal() llame a event.set()
+        mi_evento.wait()
+
+    def signal(self, nombre_hilo: str = "") -> None:
+        """
+        Operación SIGNAL (también llamada V, up o release).
+
+        Incrementa el contador. Si hay hilos bloqueados en wait(),
+        desbloquea al primero de la cola (FIFO) en lugar de incrementar.
+
+        Parameters
+        ----------
+        nombre_hilo : str
+            Nombre del hilo llamante (solo para los prints de diagnóstico).
+        """
+        self._lock.acquire()
+        try:
+            if self._esperando:
+                # Hay al menos un hilo bloqueado → lo despertamos
+                # El contador NO se incrementa porque el cupo va directo
+                # al hilo que estaba esperando.
+                evento_siguiente = self._esperando.pop(0)   # FIFO
+                if nombre_hilo:
+                    print(f"  ▶  {nombre_hilo} hace SIGNAL "
+                          f"→ desbloquea al siguiente en cola")
+                    sys.stdout.flush()
+                # set() desbloquea el event.wait() del hilo esperando
+                evento_siguiente.set()
+            else:
+                # Nadie espera → simplemente incrementamos el contador
+                self._contador += 1
+                if nombre_hilo:
+                    print(f"  ▶  {nombre_hilo} hace SIGNAL "
+                          f"→ semáforo={self._contador} (nadie esperaba)")
+                    sys.stdout.flush()
+        finally:
+            self._lock.release()
+
+    @property
+    def valor(self) -> int:
+        """Retorna el valor actual del contador (solo para diagnóstico)."""
+        self._lock.acquire()
+        try:
+            return self._contador
+        finally:
+            self._lock.release()
+
+
+# ════════════════════════════════════════════════════════════════════════
+# BLOQUE 3: FASE 1 — Demostración explícita de WAIT/SIGNAL bloqueante
+# ════════════════════════════════════════════════════════════════════════
+#
+# Aquí creamos 3 hilos que compiten por un semáforo con capacidad = 1.
+# Solo UNO puede estar adentro a la vez. Los otros dos quedarán
+# BLOQUEADOS en wait() y serán desbloqueados uno por uno cuando el
+# hilo que está adentro haga signal().
+#
+# El retardo artificial (time.sleep) dentro de la sección crítica
+# hace visible que los otros hilos esperan de verdad.
+# ════════════════════════════════════════════════════════════════════════
+
+def tarea_con_semaforo(nombre: str, semaforo: Semaforo,
+                       duracion_trabajo: float) -> None:
+    """
+    Simula una tarea que necesita acceso exclusivo a un recurso protegido
+    por un semáforo. Muestra explícitamente el bloqueo y desbloqueo.
+
+    Parameters
+    ----------
+    nombre : str
+        Nombre del hilo (para los mensajes de diagnóstico).
+    semaforo : Semaforo
+        Semáforo compartido que controla el acceso al recurso.
+    duracion_trabajo : float
+        Segundos que el hilo "trabaja" dentro de la sección crítica.
+    """
+    print(f"  →  {nombre} llegó, intenta hacer WAIT al semáforo "
+          f"(valor actual={semaforo.valor})")
+    sys.stdout.flush()
+
+    # ── WAIT: intenta entrar a la sección crítica ────────────────────────
+    # Si el semáforo es 0, este hilo se BLOQUEA aquí hasta recibir signal.
+    semaforo.wait(nombre_hilo=nombre)
+
+    # Si llegamos aquí, el semáforo nos dejó pasar (contador era > 0,
+    # o fuimos desbloqueados por un signal de otro hilo).
+    print(f"  ✓  {nombre} ENTRÓ a la sección crítica "
+          f"— trabajando {duracion_trabajo:.1f}s...")
+    sys.stdout.flush()
+
+    # Simulamos trabajo dentro de la sección crítica.
+    # Durante este tiempo, cualquier otro hilo que intente wait() quedará bloqueado.
+    time.sleep(duracion_trabajo)
+
+    print(f"  ✗  {nombre} terminó su trabajo, sale y hace SIGNAL")
+    sys.stdout.flush()
+
+    # ── SIGNAL: libera el semáforo para el siguiente hilo bloqueado ──────
+    semaforo.signal(nombre_hilo=nombre)
+
+
+# ════════════════════════════════════════════════════════════════════════
+# BLOQUE 4: FASE 2 — Productores (hilos) + Consumidor (proceso hijo) + PIPE
+# ════════════════════════════════════════════════════════════════════════
+#
+# Los productores usan un SpinLock (no semáforo) para acceso exclusivo
+# al pipe. La diferencia con el semáforo es que aquí el propósito es
+# evitar corrupción de datos (mutex), no limitar concurrencia por cupo.
+# ════════════════════════════════════════════════════════════════════════
+
+def productor(id_hilo: int, conn_escritura,
+              mutex: SpinLock, semaforo_pipe: Semaforo) -> None:
+    """
+    Hilo productor que genera mensajes y los envía por el pipe.
+
+    Usa semaforo_pipe (capacidad=1) para acceso exclusivo al pipe,
+    demostrando que el bloqueo WAIT/SIGNAL también protege el recurso
+    compartido en este contexto.
 
     Parameters
     ----------
     id_hilo : int
         Identificador del hilo (1, 2 o 3).
     conn_escritura : multiprocessing.Connection
-        Extremo de escritura del pipe (compartido entre todos los hilos).
-    mutex : SimpleSpinLock
-        Spinlock compartido que protege el acceso exclusivo a conn_escritura.
+        Extremo de escritura del pipe, compartido entre los 3 hilos.
+    mutex : SpinLock
+        SpinLock alternativo (no usado en el envío principal, solo referencia).
+    semaforo_pipe : Semaforo
+        Semáforo con valor=1 que protege el acceso al pipe.
     """
-    # Semilla aleatoria única por hilo para evitar valores idénticos
     random.seed(id_hilo * 1337 + int(time.time()))
 
-    for i in range(5):
+    for i in range(3):
         numero  = random.randint(10, 99)
-        mensaje = f"Productor-{id_hilo} | msg #{i+1} | dato={numero}"
+        mensaje = f"Prod-{id_hilo} | msg #{i+1} | dato={numero}"
 
-        # Simula trabajo de procesamiento (duración aleatoria por hilo)
-        time.sleep(random.uniform(0.1, 0.45))
+        # Simula trabajo de generación del mensaje
+        time.sleep(random.uniform(0.05, 0.3))
 
-        # ── SECCIÓN CRÍTICA: acceso exclusivo al pipe ────────────────────
-        # Si dos hilos llaman a send() simultáneamente sin este bloqueo,
-        # los datos en el pipe se corrompen (race condition).
-        mutex.acquire()
+        # ── SECCIÓN CRÍTICA: acceso exclusivo al pipe vía semáforo ──────
+        # Usamos semáforo en lugar de spinlock para mostrar que sirve
+        # también como mutex (semáforo binario con valor inicial = 1).
+        semaforo_pipe.wait(nombre_hilo=f"Prod-{id_hilo}")
         try:
-            # send() serializa el string con pickle y lo escribe en el pipe
             conn_escritura.send(mensaje)
         finally:
-            # SIEMPRE liberamos en el bloque finally para evitar deadlock
-            # aunque send() haya lanzado una excepción.
-            mutex.release()
+            semaforo_pipe.signal(nombre_hilo=f"Prod-{id_hilo}")
         # ── FIN SECCIÓN CRÍTICA ──────────────────────────────────────────
 
-    # Señal de terminación: el consumidor la usa para saber que
-    # este productor ya no enviará más mensajes.
-    mutex.acquire()
+    # Señal de fin
+    semaforo_pipe.wait(nombre_hilo=f"Prod-{id_hilo}")
     try:
         conn_escritura.send(f"FIN-{id_hilo}")
     finally:
-        mutex.release()
+        semaforo_pipe.signal(nombre_hilo=f"Prod-{id_hilo}")
 
-
-# ========================================================================
-# BLOQUE 3: CONSUMIDOR — Se ejecuta en el proceso hijo
-# ========================================================================
-#
-# El proceso hijo recibe el extremo de LECTURA del pipe.
-# Lee mensajes en un bucle hasta recibir una señal "FIN" por cada
-# productor. Como es un proceso separado (spawn en Windows), tiene
-# su propio espacio de memoria; la única comunicación posible con el
-# padre es a través del pipe.
-# ========================================================================
 
 def consumidor(conn_lectura, num_productores: int) -> None:
     """
-    Función del proceso consumidor (ejecutada en el proceso hijo).
-
-    Recibe mensajes del pipe y los muestra en pantalla hasta haber
-    recibido una señal FIN por cada productor.
+    Proceso hijo consumidor. Lee mensajes del pipe hasta recibir
+    una señal FIN por cada productor.
 
     Parameters
     ----------
     conn_lectura : multiprocessing.Connection
         Extremo de lectura del pipe.
     num_productores : int
-        Cantidad de productores; determina cuántas señales FIN esperar.
+        Cantidad de productores esperados.
     """
     fines_recibidos    = 0
     mensajes_recibidos = 0
 
-    print(f"\n  [CONSUMIDOR pid={os.getpid()}] Listo, esperando mensajes...\n")
+    print(f"\n      [CONSUMIDOR pid={os.getpid()}] Listo, esperando mensajes...\n")
     sys.stdout.flush()
 
-    # Bucle principal: leemos hasta haber recibido FIN de cada productor
     while fines_recibidos < num_productores:
         try:
-            # recv() bloquea al proceso hijo hasta que llegue un mensaje.
-            # Cuando el padre cierra conn_escritura sin más datos → EOFError.
+            # recv() bloquea al proceso hijo hasta que llegue un mensaje
             mensaje = conn_lectura.recv()
         except EOFError:
-            # El padre cerró la conexión → salida limpia
-            break
+            break   # el padre cerró la conexión
 
         if mensaje.startswith("FIN"):
-            # Contamos los finales para saber cuándo terminar
             fines_recibidos += 1
-            print(f"  [CONSUMIDOR] Señal fin ({fines_recibidos}/{num_productores}): {mensaje}")
+            print(f"      [CONSUMIDOR] Señal fin "
+                  f"({fines_recibidos}/{num_productores}): {mensaje}")
         else:
-            # Mensaje de datos normal
             mensajes_recibidos += 1
-            print(f"  [CONSUMIDOR] ✓ [{mensajes_recibidos:02d}] {mensaje}")
+            print(f"      [CONSUMIDOR] ✓ [{mensajes_recibidos:02d}] {mensaje}")
 
         sys.stdout.flush()
 
-    print(f"\n  [CONSUMIDOR] Finalizado. Mensajes procesados: {mensajes_recibidos}")
+    print(f"\n      [CONSUMIDOR] Finalizado. Mensajes recibidos: {mensajes_recibidos}")
     sys.stdout.flush()
 
 
-# ========================================================================
-# PUNTO DE ENTRADA — Demostración paso a paso con explicaciones
-# ========================================================================
-#
-# IMPORTANTE (Windows):
-#   En Windows, multiprocessing usa el método "spawn": al crear un proceso
-#   hijo, Python lanza un intérprete nuevo e importa este módulo desde cero.
-#   La guardia if __name__ == "__main__": evita que el código de creación
-#   de procesos se ejecute también en el proceso hijo → sin ella el programa
-#   entraría en un bucle infinito de procesos.
-# ========================================================================
+# ════════════════════════════════════════════════════════════════════════
+# PUNTO DE ENTRADA
+# ════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
 
-    # En Windows es obligatorio llamar a freeze_support() si el script
-    # se va a empaquetar como .exe (con PyInstaller, etc.). No hace daño
-    # llamarlo siempre.
-    multiprocessing.freeze_support()
+    multiprocessing.freeze_support()   # necesario si se empaqueta con PyInstaller
 
-    NUM_PRODUCTORES   = 3   # cantidad de hilos productores
-    MENSAJES_POR_HILO = 5   # mensajes que genera cada productor
+    NUM_PRODUCTORES = 3
 
-    # ── PRESENTACIÓN ────────────────────────────────────────────────────
-    print("=" * 65)
-    print("  SISTEMAS OPERATIVOS — Demo: Procesos, Pipes y Spinlock")
+    # ── ENCABEZADO ───────────────────────────────────────────────────────
+    print("=" * 68)
+    print("  SISTEMAS OPERATIVOS — Procesos · Pipes · SpinLock · Semáforo")
     print(f"  Plataforma: {sys.platform}  |  Python {sys.version.split()[0]}")
-    print("=" * 65)
-    print(f"""
-Arquitectura:
-  Proceso PADRE  (pid={os.getpid()})
-    ├─ Hilo Productor 1 ─┐
-    ├─ Hilo Productor 2 ─┼──► [PIPE] ──► Proceso HIJO (Consumidor)
-    └─ Hilo Productor 3 ─┘
+    print("=" * 68)
 
-  • Los hilos comparten memoria con el padre → necesitan SPINLOCK
-  • El proceso hijo tiene memoria propia → se comunica solo por PIPE
-""")
-
-    # ── PASO 1: Crear el PIPE ────────────────────────────────────────────
-    print("─" * 65)
-    print("PASO 1: Creando el PIPE con multiprocessing.Pipe()")
-    print("  Pipe(duplex=False) crea un canal UNIDIRECCIONAL.")
-    print("  conn_lectura   → solo el proceso hijo leerá de aquí.")
-    print("  conn_escritura → los hilos del padre escribirán aquí.")
-    conn_lectura, conn_escritura = multiprocessing.Pipe(duplex=False)
-    print("  → PIPE creado  ✓\n")
-
-    # ── PASO 2: Crear el SPINLOCK ────────────────────────────────────────
-    print("─" * 65)
-    print("PASO 2: Inicializando el SPINLOCK (implementado a mano)")
-
-    if _CAS_WIN is not None:
-        modo_cas = "InterlockedCompareExchange  (kernel32 / Win32)"
-    elif _CAS_UNIX is not None:
+    if _CAS_WIN:
+        modo_cas = "InterlockedCompareExchange (kernel32 / Win32)"
+    elif _CAS_UNIX:
         modo_cas = "__atomic_compare_exchange_n (libc / GCC)"
     else:
-        modo_cas = "fallback threading.Lock (CAS nativo no disponible)"
+        modo_cas = "fallback threading.Lock"
+    print(f"  CAS utilizado: {modo_cas}\n")
 
-    print(f"  Plataforma detectada : {_PLATAFORMA}")
-    print(f"  Función CAS utilizada: {modo_cas}")
-    mutex = SimpleSpinLock()
-    print("  → Spinlock listo  ✓\n")
+    # ════════════════════════════════════════════════════════════════════
+    # FASE 1: Demostración de WAIT / SIGNAL con bloqueo visible
+    # ════════════════════════════════════════════════════════════════════
+    print("═" * 68)
+    print("  FASE 1 — Demostración de WAIT / SIGNAL bloqueante")
+    print("═" * 68)
+    print("""
+  Creamos un semáforo con valor inicial = 1 (solo 1 hilo puede entrar).
+  Lanzamos 3 hilos casi al mismo tiempo. El primero en llegar hace WAIT,
+  entra, y los otros DOS quedan BLOQUEADOS. Cuando el primero hace SIGNAL,
+  desbloquea al siguiente; y así sucesivamente.
 
-    # ── PASO 3: Crear el proceso hijo (consumidor) ───────────────────────
-    print("─" * 65)
-    print("PASO 3: Creando proceso HIJO con multiprocessing.Process()")
-    print("  En Windows el método es 'spawn': se lanza un intérprete")
-    print("  Python nuevo y se le pasa conn_lectura como argumento.")
-    print("  El hijo NO comparte memoria con el padre; solo recibe args.\n")
+  Esto demuestra que sin sincronización dos hilos entrarían a la vez
+  y corromperían el recurso compartido.
+""")
 
+    # Semáforo binario: capacidad = 1 → solo un hilo adentro a la vez
+    sem_fase1 = Semaforo(valor_inicial=1)
+
+    # Los tres hilos arrancan casi simultáneamente.
+    # Usamos duraciones distintas para hacer visible quién entra y quién espera.
+    configuraciones = [
+        ("Hilo-A", 2.0),   # entra primero, trabaja 2 s → los demás esperan
+        ("Hilo-B", 1.0),   # bloqueado hasta que A haga signal
+        ("Hilo-C", 0.5),   # bloqueado hasta que B haga signal
+    ]
+
+    hilos_fase1 = []
+    for nombre, duracion in configuraciones:
+        t = threading.Thread(
+            target=tarea_con_semaforo,
+            args=(nombre, sem_fase1, duracion),
+            name=nombre
+        )
+        hilos_fase1.append(t)
+
+    print("  Lanzando los 3 hilos...")
+    print("─" * 68)
+    for t in hilos_fase1:
+        t.start()
+        time.sleep(0.05)   # pequeño retardo para que lleguen en orden A→B→C
+
+    for t in hilos_fase1:
+        t.join()
+
+    print("─" * 68)
+    print("  ✓ FASE 1 completada. Los 3 hilos pasaron de a uno por vez.\n")
+
+    # ════════════════════════════════════════════════════════════════════
+    # FASE 2: Productores (hilos) → Pipe → Consumidor (proceso hijo)
+    # ════════════════════════════════════════════════════════════════════
+    print("═" * 68)
+    print("  FASE 2 — Productores / PIPE / Consumidor")
+    print("═" * 68)
+    print(f"""
+  Creamos {NUM_PRODUCTORES} hilos productores en el proceso padre y un proceso
+  hijo consumidor. Se comunican por un PIPE unidireccional.
+  El acceso al pipe está protegido por un SEMÁFORO (valor=1),
+  que aquí funciona como mutex: solo un productor escribe a la vez.
+  Verás los WAIT y SIGNAL de cada productor antes y después de enviar.
+""")
+
+    # Creamos el PIPE
+    print("─" * 68)
+    print("PASO 1: Creando el PIPE (multiprocessing.Pipe)")
+    conn_lectura, conn_escritura = multiprocessing.Pipe(duplex=False)
+    print("  → PIPE listo  ✓\n")
+
+    # Semáforo que protege el acceso al pipe (valor=1 → mutex binario)
+    print("─" * 68)
+    print("PASO 2: Creando el SEMÁFORO para el pipe (valor inicial=1)")
+    print("  Con valor=1: solo un productor puede llamar a send() a la vez.")
+    print("  Si dos llegan juntos, el segundo hace WAIT y queda bloqueado")
+    print("  hasta que el primero termina de enviar y hace SIGNAL.")
+    sem_pipe = Semaforo(valor_inicial=1)
+    mutex_ref = SpinLock()   # SpinLock de referencia (no se usa en el envío principal)
+    print("  → Semáforo listo  ✓\n")
+
+    # Creamos el proceso hijo
+    print("─" * 68)
+    print("PASO 3: Creando el proceso HIJO (consumidor)")
     proceso_hijo = multiprocessing.Process(
         target=consumidor,
         args=(conn_lectura, NUM_PRODUCTORES),
         name="Consumidor",
-        daemon=False   # False: el padre esperará a que termine
+        daemon=False
     )
     proceso_hijo.start()
+    conn_lectura.close()   # el padre cierra su copia de lectura
+    print(f"  → Proceso hijo pid={proceso_hijo.pid}  ✓\n")
 
-    # El padre cierra su copia de conn_lectura.
-    # Esto es necesario para que el EOF llegue correctamente al hijo
-    # cuando el padre cierre conn_escritura más adelante.
-    conn_lectura.close()
-
-    print(f"  → Proceso HIJO iniciado  pid={proceso_hijo.pid}  ✓")
-    print(f"  → Proceso PADRE continúa pid={os.getpid()}\n")
-
-    # ── PASO 4: Crear los hilos productores ─────────────────────────────
-    print("─" * 65)
+    # Lanzamos los hilos productores
+    print("─" * 68)
     print(f"PASO 4: Lanzando {NUM_PRODUCTORES} hilos productores")
-    print("  Los hilos viven DENTRO del proceso padre y comparten")
-    print("  conn_escritura y el mutex. Sin el spinlock, dos hilos")
-    print("  podrían llamar a send() al mismo tiempo → datos corruptos.\n")
+    print("  Cada vez que un productor quiera enviar, hará WAIT al semáforo.")
+    print("  Si otro ya está enviando, quedará BLOQUEADO hasta el SIGNAL.\n")
 
-    hilos = []
+    hilos_prod = []
     for i in range(1, NUM_PRODUCTORES + 1):
-        hilo = threading.Thread(
+        t = threading.Thread(
             target=productor,
-            args=(i, conn_escritura, mutex),
-            name=f"Productor-{i}",
-            daemon=True   # muere si el proceso padre termina abruptamente
+            args=(i, conn_escritura, mutex_ref, sem_pipe),
+            name=f"Prod-{i}",
+            daemon=True
         )
-        hilos.append(hilo)
-        hilo.start()
-        print(f"  → {hilo.name} iniciado  (tid nativo={hilo.native_id})")
+        hilos_prod.append(t)
+        t.start()
+        print(f"  → Prod-{i} iniciado  (tid={t.native_id})")
 
     print()
 
-    # ── PASO 5: Esperar que terminen los hilos ───────────────────────────
-    print("─" * 65)
-    print("PASO 5: Padre espera a los hilos con join()")
-    print("  join() bloquea hasta que ese hilo termina su función.\n")
+    # Esperamos que terminen los productores
+    print("─" * 68)
+    print("PASO 5: Esperando que terminen los productores (join)\n")
+    for t in hilos_prod:
+        t.join()
+        print(f"  → {t.name} terminó  ✓")
 
-    for hilo in hilos:
-        hilo.join()
-        print(f"  → {hilo.name} terminó  ✓")
-
-    # ── PASO 6: Cerrar conn_escritura ────────────────────────────────────
+    # Cerramos el pipe → el consumidor recibirá EOF
     print()
-    print("─" * 65)
-    print("PASO 6: Cerrando conn_escritura en el proceso padre")
-    print("  Al cerrar la única Connection de escritura activa,")
-    print("  el proceso hijo recibirá EOFError en recv() y podrá")
-    print("  terminar limpiamente si no quedan más mensajes.\n")
+    print("─" * 68)
+    print("PASO 6: Cerrando conn_escritura → el consumidor recibirá EOF\n")
     conn_escritura.close()
 
-    # ── PASO 7: Esperar al proceso hijo ──────────────────────────────────
-    print("─" * 65)
-    print(f"PASO 7: Padre espera al proceso HIJO con process.join()")
-    print(f"  (pid={proceso_hijo.pid})\n")
-
+    # Esperamos al proceso hijo
+    print("─" * 68)
+    print(f"PASO 7: Esperando al proceso HIJO (pid={proceso_hijo.pid})\n")
     proceso_hijo.join()
-    print(f"  → Proceso hijo terminó  "
-          f"(código de salida: {proceso_hijo.exitcode})  ✓\n")
+    print(f"  → Proceso hijo terminó (código={proceso_hijo.exitcode})  ✓\n")
 
     # ── RESUMEN FINAL ─────────────────────────────────────────────────────
-    print("=" * 65)
+    print("=" * 68)
     print("  DEMOSTRACIÓN COMPLETADA")
-    print("=" * 65)
+    print("=" * 68)
     print("""
-Consignas cubiertas:
-  ✓ Creación de procesos  → multiprocessing.Process  (compatible Windows)
-  ✓ Creación de hilos     → threading.Thread
-  ✓ Comunicación por PIPE → multiprocessing.Pipe + Connection.send/recv
-  ✓ Sincronización        → SimpleSpinLock con CAS atómico nativo
-                            (InterlockedCompareExchange en Windows,
-                             __atomic_compare_exchange_n en Linux/macOS)
-                            implementado desde cero, sin abstracciones
+Conceptos demostrados:
+
+  SpinLock (mutex):
+    · Variable 0/1 protegida con CAS atómico nativo (kernel32 / libc)
+    · acquire() gira en busy-wait hasta que el lock está libre
+    · release() escribe 0 y el próximo hilo en spin puede entrar
+
+  Semáforo (implementado con SpinLock + threading.Event):
+    · wait()  → si contador=0, el hilo se BLOQUEA (event.wait)
+    · signal() → si hay hilos bloqueados, desbloquea UNO (event.set)
+    · Con valor_inicial=1 actúa como mutex binario
+    · Con valor_inicial=N permite N hilos simultáneos
+
+  Pipe (multiprocessing.Pipe):
+    · Canal unidireccional entre proceso padre e hijo
+    · send() / recv() son las únicas operaciones inter-proceso
+
+  Procesos e hilos:
+    · multiprocessing.Process → proceso hijo con memoria propia
+    · threading.Thread        → hilos que comparten memoria del padre
+    · La guardia __main__ es obligatoria en Windows (método spawn)
 """)
